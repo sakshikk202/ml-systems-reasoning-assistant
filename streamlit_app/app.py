@@ -6,7 +6,6 @@ from typing import Optional
 from db import fetch_scenarios, insert_diagnosis_run, fetch_recent_runs
 from llm import hf_chat
 
-
 st.set_page_config(
     page_title="ML Systems Reasoning Assistant",
     layout="centered",
@@ -44,12 +43,9 @@ def build_stub_diagnosis(prompt: str) -> dict:
 def _clean_llm_json(text: str) -> str:
     text = text.strip()
 
-    # Remove fenced code block if model wraps JSON in ```...```
     if text.startswith("```"):
         lines = text.splitlines()
-        # drop first fence line
         lines = lines[1:]
-        # drop last fence line if present
         if lines and lines[-1].strip().startswith("```"):
             lines = lines[:-1]
         text = "\n".join(lines).strip()
@@ -140,6 +136,9 @@ if run:
             issue = prompt.strip()
             scenario_title = selected["title"] if selected else None
 
+            scenario_id = selected["id"] if selected else None
+            scenario_id_str = str(scenario_id) if scenario_id is not None else None
+
             if os.getenv("HF_TOKEN"):
                 try:
                     diagnosis = build_llm_diagnosis(issue, scenario_title)
@@ -150,7 +149,7 @@ if run:
                 diagnosis = build_stub_diagnosis(issue)
 
             saved = insert_diagnosis_run(
-                scenario_id=selected["id"] if selected else None,
+                scenario_id=scenario_id,
                 prompt=issue,
                 diagnosis=diagnosis,
             )
@@ -160,7 +159,7 @@ if run:
             st.json(
                 {
                     "ok": True,
-                    "scenarioId": selected["id"] if selected else None,
+                    "scenarioId": scenario_id_str,
                     "input": issue,
                     "diagnosis": diagnosis,
                 }
@@ -177,8 +176,9 @@ try:
         st.info("No diagnosis runs yet.")
     else:
         for r in runs:
+            scenario_id_str = str(r["scenario_id"]) if r.get("scenario_id") is not None else None
             with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write("Scenario ID:", r["scenario_id"])
+                st.write("Scenario ID:", scenario_id_str)
                 st.write("Input:")
                 st.write(r["input"])
                 st.write("Diagnosis:")
