@@ -1,7 +1,7 @@
 import os
 import json
 import streamlit as st
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 from db import fetch_scenarios, insert_diagnosis_run, fetch_recent_runs
 from llm import hf_chat
@@ -15,6 +15,15 @@ st.title("ML Systems Reasoning Assistant")
 st.caption("Diagnose why ML systems fail in production — with checks, causes, and actions.")
 
 
+# ---------------- Runbook mapping (optional) ----------------
+# If your scenarios table already has a field like runbook_url, this mapping is only used as fallback.
+RUNBOOKS_BY_TITLE = {
+    # "Missing features / null explosion": "https://your-runbook-link",
+    # "Model drift after data change": "https://your-runbook-link",
+    # "Inference latency spike": "https://your-runbook-link",
+}
+
+
 @st.cache_data(ttl=30)
 def load_scenarios():
     return fetch_scenarios()
@@ -22,6 +31,7 @@ def load_scenarios():
 
 def build_stub_diagnosis(prompt: str) -> dict:
     return {
+        "severity": "Medium",
         "summary": "API wired correctly (stub).",
         "checks": [
             "Validate feature pipeline health",
@@ -53,11 +63,24 @@ def _clean_llm_json(text: str) -> str:
     return text
 
 
+def _normalize_severity(val: Optional[str]) -> str:
+    if not val:
+        return "Medium"
+    v = val.strip().lower()
+    if v in ("low", "l"):
+        return "Low"
+    if v in ("high", "h", "sev1", "sev-1", "critical", "p0", "p1"):
+        return "High"
+    if v in ("medium", "med", "m", "sev2", "sev-2", "p2"):
+        return "Medium"
+    return "Medium"
+
+
 def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> dict:
     system = (
         "You are an ML systems reliability engineer. "
-        "Return concise, production-grade guidance in JSON with keys: "
-        "summary, checks, causes, actions. "
+        "Return concise, production-grade guidance in STRICT JSON with keys: "
+        "severity (Low|Medium|High), summary, checks, causes, actions. "
         "checks/causes/actions must be short bullet strings."
     )
 
@@ -66,6 +89,7 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> di
         f"Issue: {prompt}\n\n"
         "Return ONLY valid JSON like:\n"
         "{\n"
+        '  "severity": "Low|Medium|High",\n'
         '  "summary": "...",\n'
         '  "checks": ["..."],\n'
         '  "causes": ["..."],\n'
@@ -79,13 +103,16 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> di
         cleaned = _clean_llm_json(text)
         obj = json.loads(cleaned)
         return {
+            "severity": _normalize_severity(obj.get("severity")),
             "summary": (obj.get("summary") or "").strip() or "No summary returned.",
             "checks": obj.get("checks") or [],
             "causes": obj.get("causes") or [],
             "actions": obj.get("actions") or [],
         }
     except Exception:
+        # If model returns garbage/non-JSON, keep it readable
         return {
+            "severity": "Medium",
             "summary": text.strip(),
             "checks": [],
             "causes": [],
@@ -93,32 +120,115 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> di
         }
 
 
-def render_diagnosis(diagnosis: dict) -> None:
-    summary = (diagnosis.get("summary") or "").strip() or "No summary returned."
-    checks = diagnosis.get("checks") or []
-    causes = diagnosis.get("causes") or []
-    actions = diagnosis.get("actions") or []
+def get_runbook_url(selected: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not selected:
+        return None
+
+    # If DB returns a field like runbook_url / runbook / url, use it.
+    for key in ("runbook_url", "runbook", "runbookLink", "runbook_link", "url"):
+        if selected.get(key):
+            return str(selected.get(key))
+
+    # Fallback mapping by title
+    title = selected.get("title")
+    if title and title in RUNBOOKS_BY_TITLE:
+        return RUNBOOKS_BY_TITLE[title]
+
+    return None
+
+
+def _list_or_empty(val: Any) -> List[str]:
+    if isinstance(val, list):
+        return [str(x) for x in val if str(x).strip()]
+    return []
+
+
+def format_copy_text(issue: str, scenario_title: Optional[str], diagnosis: Dict[str, Any], runbook_url: Optional[str]) -> str:
+    severity = diagnosis.get("severity", "Medium")
+    summary = diagnosis.get("summary", "")
+    checks = _list_or_empty(diagnosis.get("checks"))
+    causes = _list_or_empty(diagnosis.get("causes"))
+    actions = _list_or_empty(diagnosis.get("actions"))
+
+    parts = []
+    parts.append(f"Scenario: {scenario_title or 'Custom'}")
+    parts.append(f"Issue: {issue}")
+    parts.append(f"Severity: {severity}")
+    if runbook_url:
+        parts.append(f"Runbook: {runbook_url}")
+    parts.append("")
+    parts.append("Summary:")
+    parts.append(summary.strip())
+    parts.append("")
+    if checks:
+        parts.append("Checks to Run:")
+        parts.extend([f"- {c}" for c in checks])
+        parts.append("")
+    if causes:
+        parts.append("Likely Causes:")
+        parts.extend([f"- {c}" for c in causes])
+        parts.append("")
+    if actions:
+        parts.append("Recommended Actions:")
+        parts.extend([f"- {a}" for a in actions])
+        parts.append("")
+
+    return "\n".join(parts).strip() + "\n"
+
+
+def render_severity(severity: str) -> None:
+    sev = _normalize_severity(severity)
+    if sev == "High":
+        st.error("Severity: High")
+    elif sev == "Low":
+        st.info("Severity: Low")
+    else:
+        st.warning("Severity: Medium")
+
+
+def render_diagnosis(diagnosis: Dict[str, Any], issue: str, scenario_title: Optional[str], runbook_url: Optional[str]) -> None:
+    render_severity(diagnosis.get("severity", "Medium"))
+
+    if runbook_url:
+        st.markdown(f"Runbook: {runbook_url}")
 
     st.subheader("Diagnosis")
+
     st.markdown("### Summary")
-    st.write(summary)
+    st.write(diagnosis.get("summary", "").strip())
 
-    def render_list(title: str, items: list) -> None:
-        if not items:
-            return
-        st.markdown(f"### {title}")
-        for item in items:
-            if item is None:
-                continue
-            st.markdown(f"- {str(item).strip()}")
+    checks = _list_or_empty(diagnosis.get("checks"))
+    causes = _list_or_empty(diagnosis.get("causes"))
+    actions = _list_or_empty(diagnosis.get("actions"))
 
-    render_list("Checks to Run", checks)
-    render_list("Likely Causes", causes)
-    render_list("Recommended Actions", actions)
+    if checks:
+        st.markdown("### Checks to Run")
+        for c in checks:
+            st.markdown(f"- {c}")
 
-    with st.expander("Show raw JSON"):
+    if causes:
+        st.markdown("### Likely Causes")
+        for c in causes:
+            st.markdown(f"- {c}")
+
+    if actions:
+        st.markdown("### Recommended Actions")
+        for a in actions:
+            st.markdown(f"- {a}")
+
+    st.divider()
+
+    # Copy blocks (Streamlit shows a copy button on st.code)
+    st.markdown("### Copy")
+    copy_text = format_copy_text(issue, scenario_title, diagnosis, runbook_url)
+    st.code(copy_text, language="markdown")
+    st.code(json.dumps(diagnosis, indent=2), language="json")
+
+    with st.expander("Show raw JSON payload"):
         st.json(diagnosis)
 
+
+# ---------------- UI ----------------
 
 st.divider()
 
@@ -162,9 +272,9 @@ if run:
         try:
             issue = prompt.strip()
             scenario_title = selected["title"] if selected else None
-
             scenario_id = selected["id"] if selected else None
-            scenario_id_str = str(scenario_id) if scenario_id is not None else None
+
+            runbook_url = get_runbook_url(selected)
 
             if os.getenv("HF_TOKEN"):
                 try:
@@ -182,7 +292,13 @@ if run:
             )
 
             st.success(f"Saved run: {saved['id']} @ {saved['created_at']}")
-            render_diagnosis(diagnosis)
+
+            render_diagnosis(
+                diagnosis=diagnosis,
+                issue=issue,
+                scenario_title=scenario_title,
+                runbook_url=runbook_url,
+            )
 
         except Exception as e:
             st.error(f"Run failed: {e}")
@@ -196,12 +312,41 @@ try:
         st.info("No diagnosis runs yet.")
     else:
         for r in runs:
-            scenario_id_str = str(r["scenario_id"]) if r.get("scenario_id") is not None else None
             with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write("Scenario ID:", scenario_id_str)
-                st.markdown("### Input")
-                st.write(r["input"])
-                st.markdown("### Diagnosis")
-                render_diagnosis(r["diagnosis"])
+                st.write(f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}")
+                st.write("Input:")
+                st.write(r.get("input", ""))
+
+                d = r.get("diagnosis") or {}
+                # If you want runbook links in history too, you can’t infer scenario title from DB unless you store it.
+                # So history renders without runbook unless your diagnosis JSON includes it (we didn’t add it).
+                st.divider()
+                render_severity(d.get("severity", "Medium"))
+
+                st.markdown("### Summary")
+                st.write((d.get("summary") or "").strip())
+
+                checks = _list_or_empty(d.get("checks"))
+                causes = _list_or_empty(d.get("causes"))
+                actions = _list_or_empty(d.get("actions"))
+
+                if checks:
+                    st.markdown("### Checks to Run")
+                    for c in checks:
+                        st.markdown(f"- {c}")
+
+                if causes:
+                    st.markdown("### Likely Causes")
+                    for c in causes:
+                        st.markdown(f"- {c}")
+
+                if actions:
+                    st.markdown("### Recommended Actions")
+                    for a in actions:
+                        st.markdown(f"- {a}")
+
+                with st.expander("Show raw JSON"):
+                    st.json(d)
+
 except Exception as e:
     st.error(f"Failed to load history: {e}")
