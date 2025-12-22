@@ -93,6 +93,33 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> di
         }
 
 
+def render_diagnosis(diagnosis: dict) -> None:
+    summary = (diagnosis.get("summary") or "").strip() or "No summary returned."
+    checks = diagnosis.get("checks") or []
+    causes = diagnosis.get("causes") or []
+    actions = diagnosis.get("actions") or []
+
+    st.subheader("Diagnosis")
+    st.markdown("### Summary")
+    st.write(summary)
+
+    def render_list(title: str, items: list) -> None:
+        if not items:
+            return
+        st.markdown(f"### {title}")
+        for item in items:
+            if item is None:
+                continue
+            st.markdown(f"- {str(item).strip()}")
+
+    render_list("Checks to Run", checks)
+    render_list("Likely Causes", causes)
+    render_list("Recommended Actions", actions)
+
+    with st.expander("Show raw JSON"):
+        st.json(diagnosis)
+
+
 st.divider()
 
 col1, col2 = st.columns([1, 1])
@@ -155,15 +182,8 @@ if run:
             )
 
             st.success(f"Saved run: {saved['id']} @ {saved['created_at']}")
-            st.subheader("Diagnosis Output")
-            st.json(
-                {
-                    "ok": True,
-                    "scenarioId": scenario_id_str,
-                    "input": issue,
-                    "diagnosis": diagnosis,
-                }
-            )
+            render_diagnosis(diagnosis)
+
         except Exception as e:
             st.error(f"Run failed: {e}")
 
@@ -179,9 +199,9 @@ try:
             scenario_id_str = str(r["scenario_id"]) if r.get("scenario_id") is not None else None
             with st.expander(f"{r['created_at']} — {r['id']}"):
                 st.write("Scenario ID:", scenario_id_str)
-                st.write("Input:")
+                st.markdown("### Input")
                 st.write(r["input"])
-                st.write("Diagnosis:")
-                st.json(r["diagnosis"])
+                st.markdown("### Diagnosis")
+                render_diagnosis(r["diagnosis"])
 except Exception as e:
     st.error(f"Failed to load history: {e}")
