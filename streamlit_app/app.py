@@ -186,7 +186,7 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # ✅ 1) Pick a scenario FIRST (independent)
+    # 1) Scenario dropdown FIRST
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
     pick = st.selectbox(
         "Pick a scenario",
@@ -199,23 +199,24 @@ with col1:
     if pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # ✅ 2) Custom BELOW scenario (independent)
+    # 2) BELOW: a separate dropdown that is ALWAYS "Custom"
+    #    (this is only to match your UI layout; it does not disable scenario selection)
     st.selectbox(
-        "Custom",
-        ["Custom"],  # stays separate as per your requirement
+        "Mode",                 # ✅ better label than "Custom"
+        ["Custom"],
         index=0,
-        key="custom_mode",
-        help="Free-form issue input",
+        key="mode_custom_only",
+        help="Use free-form problem description.",
     )
 
 with col2:
     st.subheader("Prompt")
     default_prompt = selected.get("description", "") if selected else ""
     prompt = st.text_area(
-        "Describe the issue",
+        "Problem description",  # ✅ updated label (no more “Describe the issue”)
         value=default_prompt,
         height=140,
-        placeholder="Offline metrics good → production bad. What are you seeing in prod?",
+        placeholder="Offline metrics look good → production performance degraded. What are you seeing in prod?",
     )
 
 st.divider()
@@ -265,7 +266,9 @@ try:
     else:
         for r in runs:
             with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write(f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}")
+                st.write(
+                    f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}"
+                )
                 st.write("Input:")
                 st.write(r.get("input", ""))
 
