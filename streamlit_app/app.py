@@ -46,14 +46,11 @@ def build_stub_diagnosis(prompt: str) -> Dict[str, Any]:
 
 def _clean_llm_json(text: str) -> str:
     text = (text or "").strip()
-
     if text.startswith("```"):
-        lines = text.splitlines()
-        lines = lines[1:]
+        lines = text.splitlines()[1:]
         if lines and lines[-1].strip().startswith("```"):
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-
     return text
 
 
@@ -175,6 +172,8 @@ def render_diagnosis(diagnosis: Dict[str, Any], runbook_url: Optional[str]) -> N
             st.markdown(f"- {a}")
 
 
+# ---------------- UI ----------------
+
 st.divider()
 
 col1, col2 = st.columns([1, 1])
@@ -188,33 +187,22 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    mode = st.selectbox("Mode", ["Custom", "Scenario"], index=0, key="mode")
+    # 1) Mode dropdown (ONLY Custom)
+    mode = st.selectbox("Mode", ["Custom"], index=0, key="mode_fixed_custom")
 
+    # 2) Scenario dropdown stays BELOW, but disabled when mode is Custom
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
 
-    selected: Optional[Dict[str, Any]] = None
-    pick: str = "(Custom)"
+    pick = st.selectbox(
+        "Pick a scenario",
+        scenario_titles,
+        index=0,
+        disabled=True,          # because mode is Custom only
+        key="scenario_pick",
+    )
 
-    if mode == "Custom":
-        pick = "(Custom)"
-        selected = None
-        st.selectbox(
-            "Pick a scenario",
-            scenario_titles,
-            index=0,
-            disabled=True,
-            key="scenario_pick_disabled",
-        )
-    else:
-        default_index = 1 if len(scenario_titles) > 1 else 0
-        pick = st.selectbox(
-            "Pick a scenario",
-            scenario_titles,
-            index=default_index,
-            key="scenario_pick",
-        )
-        if pick != "(Custom)":
-            selected = next((s for s in scenarios if s.get("title") == pick), None)
+    selected: Optional[Dict[str, Any]] = None
+    # keep selected as None in Custom mode always
 
 with col2:
     st.subheader("Prompt")
