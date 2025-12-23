@@ -178,8 +178,7 @@ st.divider()
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    # ✅ remove the big "Scenario" heading
-    # st.subheader("Scenario")
+    st.subheader("Scenario")
 
     try:
         scenarios = load_scenarios()
@@ -187,35 +186,34 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # ✅ Scenario dropdown should NOT show "(Custom)" anymore
-    scenario_titles = [s["title"] for s in scenarios]
+    # 1) Scenario dropdown FIRST
+    scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
+    pick = st.selectbox(
+        "Pick a scenario",
+        scenario_titles,
+        index=0,
+        key="scenario_pick",
+    )
 
-    if scenario_titles:
-        pick = st.selectbox(
-            "Pick a scenario",
-            scenario_titles,
-            index=0,
-            key="scenario_pick",
-        )
-        selected: Optional[Dict[str, Any]] = next((s for s in scenarios if s["title"] == pick), None)
-    else:
-        st.selectbox("Pick a scenario", ["No scenarios available"], index=0, disabled=True)
-        selected = None
+    selected: Optional[Dict[str, Any]] = None
+    if pick != "(Custom)":
+        selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # ✅ Custom stays as a separate dropdown below (still independent)
+    # 2) BELOW: a separate dropdown that is ALWAYS "Custom"
+    #    (this is only to match your UI layout; it does not disable scenario selection)
     st.selectbox(
-        "Mode",
+        "Mode",                 # ✅ better label than "Custom"
         ["Custom"],
         index=0,
         key="mode_custom_only",
-        help="Free-form problem description",
+        help="Use free-form problem description.",
     )
 
 with col2:
     st.subheader("Prompt")
     default_prompt = selected.get("description", "") if selected else ""
     prompt = st.text_area(
-        "Problem description",
+        "Problem description",  # ✅ updated label (no more “Describe the issue”)
         value=default_prompt,
         height=140,
         placeholder="Offline metrics look good → production performance degraded. What are you seeing in prod?",
@@ -268,7 +266,9 @@ try:
     else:
         for r in runs:
             with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write(f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}")
+                st.write(
+                    f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}"
+                )
                 st.write("Input:")
                 st.write(r.get("input", ""))
 
