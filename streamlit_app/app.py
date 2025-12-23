@@ -14,7 +14,6 @@ st.set_page_config(
 st.title("ML Systems Reasoning Assistant")
 st.caption("Diagnose why ML systems fail in production — with checks, causes, and actions.")
 
-
 RUNBOOKS_BY_TITLE: Dict[str, str] = {}
 
 
@@ -187,22 +186,26 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # 1) Mode dropdown (ONLY Custom)
-    mode = st.selectbox("Mode", ["Custom"], index=0, key="mode_fixed_custom")
+    # 1) Mode dropdown (separate, independent)
+    mode = st.selectbox(
+        "Mode",
+        ["Custom"],  # only Custom for now, but stays separate as you wanted
+        index=0,
+        key="mode_only_custom",
+    )
 
-    # 2) Scenario dropdown stays BELOW, but disabled when mode is Custom
+    # 2) Scenario dropdown BELOW (independent, NOT disabled)
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
-
     pick = st.selectbox(
         "Pick a scenario",
         scenario_titles,
         index=0,
-        disabled=True,          # because mode is Custom only
         key="scenario_pick",
     )
 
     selected: Optional[Dict[str, Any]] = None
-    # keep selected as None in Custom mode always
+    if pick != "(Custom)":
+        selected = next((s for s in scenarios if s["title"] == pick), None)
 
 with col2:
     st.subheader("Prompt")
