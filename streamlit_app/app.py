@@ -178,7 +178,7 @@ st.divider()
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("Mode")  # ✅ ONLY CHANGE (was "Scenario")
+    st.subheader("Mode")
 
     try:
         scenarios = load_scenarios()
@@ -199,9 +199,9 @@ with col1:
     if pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # 2) BELOW: a separate dropdown that is ALWAYS "Custom"
+    # 2) BELOW: rename this label to "Describe the issue"
     st.selectbox(
-        "Mode",
+        "Describe the issue",   # ✅ UPDATED (was "Mode")
         ["Custom"],
         index=0,
         key="mode_custom_only",
