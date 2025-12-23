@@ -186,15 +186,7 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # 1) Mode dropdown (separate, independent)
-    mode = st.selectbox(
-        "Mode",
-        ["Custom"],  # only Custom for now, but stays separate as you wanted
-        index=0,
-        key="mode_only_custom",
-    )
-
-    # 2) Scenario dropdown BELOW (independent, NOT disabled)
+    # ✅ 1) Pick a scenario FIRST (independent)
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
     pick = st.selectbox(
         "Pick a scenario",
@@ -206,6 +198,15 @@ with col1:
     selected: Optional[Dict[str, Any]] = None
     if pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
+
+    # ✅ 2) Custom BELOW scenario (independent)
+    st.selectbox(
+        "Custom",
+        ["Custom"],  # stays separate as per your requirement
+        index=0,
+        key="custom_mode",
+        help="Free-form issue input",
+    )
 
 with col2:
     st.subheader("Prompt")
