@@ -70,39 +70,29 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> Di
     system = (
         "You are an ML systems reliability engineer. "
         "Return concise, production-grade guidance in STRICT JSON with keys: "
-        "severity (Low|Medium|High), summary, checks, causes, actions. "
-        "checks/causes/actions must be short bullet strings."
+        "severity (Low|Medium|High), summary, checks, causes, actions."
     )
 
     user = (
         f"Scenario: {scenario_title or 'Custom'}\n"
-        f"Issue: {prompt}\n\n"
-        "Return ONLY valid JSON like:\n"
-        "{\n"
-        '  "severity": "Low|Medium|High",\n'
-        '  "summary": "...",\n'
-        '  "checks": ["..."],\n'
-        '  "causes": ["..."],\n'
-        '  "actions": ["..."]\n'
-        "}\n"
+        f"Issue: {prompt}\n"
     )
 
     text = hf_chat(user, system=system)
 
     try:
-        cleaned = _clean_llm_json(text)
-        obj = json.loads(cleaned)
+        obj = json.loads(_clean_llm_json(text))
         return {
             "severity": _normalize_severity(obj.get("severity")),
-            "summary": (obj.get("summary") or "").strip() or "No summary returned.",
-            "checks": obj.get("checks") or [],
-            "causes": obj.get("causes") or [],
-            "actions": obj.get("actions") or [],
+            "summary": obj.get("summary", "").strip(),
+            "checks": obj.get("checks", []),
+            "causes": obj.get("causes", []),
+            "actions": obj.get("actions", []),
         }
     except Exception:
         return {
             "severity": "Medium",
-            "summary": (text or "").strip(),
+            "summary": text.strip(),
             "checks": [],
             "causes": [],
             "actions": [],
@@ -112,63 +102,42 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> Di
 def get_runbook_url(selected: Optional[Dict[str, Any]]) -> Optional[str]:
     if not selected:
         return None
-
-    for key in ("runbook_url", "runbook", "runbookLink", "runbook_link", "url"):
-        if selected.get(key):
-            return str(selected.get(key))
-
-    title = selected.get("title")
-    if title and title in RUNBOOKS_BY_TITLE:
-        return RUNBOOKS_BY_TITLE[title]
-
+    for k in ("runbook_url", "runbook", "url"):
+        if selected.get(k):
+            return selected[k]
     return None
 
 
 def _list_or_empty(val: Any) -> List[str]:
-    if isinstance(val, list):
-        return [str(x) for x in val if str(x).strip()]
-    return []
+    return val if isinstance(val, list) else []
 
 
-def render_severity(severity: str) -> None:
-    sev = _normalize_severity(severity)
-    if sev == "High":
+def render_severity(severity: str):
+    if severity == "High":
         st.error("Severity: High")
-    elif sev == "Low":
+    elif severity == "Low":
         st.info("Severity: Low")
     else:
         st.warning("Severity: Medium")
 
 
-def render_diagnosis(diagnosis: Dict[str, Any], runbook_url: Optional[str]) -> None:
+def render_diagnosis(diagnosis: Dict[str, Any], runbook_url: Optional[str]):
     render_severity(diagnosis.get("severity", "Medium"))
-
     if runbook_url:
         st.markdown(f"Runbook: {runbook_url}")
 
     st.subheader("Diagnosis")
+    st.write(diagnosis.get("summary", ""))
 
-    st.markdown("### Summary")
-    st.write((diagnosis.get("summary") or "").strip())
-
-    checks = _list_or_empty(diagnosis.get("checks"))
-    causes = _list_or_empty(diagnosis.get("causes"))
-    actions = _list_or_empty(diagnosis.get("actions"))
-
-    if checks:
-        st.markdown("### Checks to Run")
-        for c in checks:
-            st.markdown(f"- {c}")
-
-    if causes:
-        st.markdown("### Likely Causes")
-        for c in causes:
-            st.markdown(f"- {c}")
-
-    if actions:
-        st.markdown("### Recommended Actions")
-        for a in actions:
-            st.markdown(f"- {a}")
+    for section, items in {
+        "Checks to Run": diagnosis.get("checks"),
+        "Likely Causes": diagnosis.get("causes"),
+        "Recommended Actions": diagnosis.get("actions"),
+    }.items():
+        if items:
+            st.markdown(f"### {section}")
+            for i in items:
+                st.markdown(f"- {i}")
 
 
 # ---------------- UI ----------------
@@ -178,125 +147,31 @@ st.divider()
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("Scenario")
+    st.subheader("Mode")  # ✅ ONLY CHANGE
 
-    try:
-        scenarios = load_scenarios()
-    except Exception as e:
-        st.error(f"Failed to load scenarios: {e}")
-        scenarios = []
-
-    # 1) Scenario dropdown FIRST
+    scenarios = load_scenarios()
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
-    pick = st.selectbox(
-        "Pick a scenario",
-        scenario_titles,
-        index=0,
-        key="scenario_pick",
-    )
 
-    selected: Optional[Dict[str, Any]] = None
-    if pick != "(Custom)":
-        selected = next((s for s in scenarios if s["title"] == pick), None)
+    pick = st.selectbox("Pick a scenario", scenario_titles)
+    selected = next((s for s in scenarios if s["title"] == pick), None) if pick != "(Custom)" else None
 
-    # 2) BELOW: a separate dropdown that is ALWAYS "Custom"
-    #    (this is only to match your UI layout; it does not disable scenario selection)
-    st.selectbox(
-        "Mode",                 # ✅ better label than "Custom"
-        ["Custom"],
-        index=0,
-        key="mode_custom_only",
-        help="Use free-form problem description.",
-    )
+    st.selectbox("Mode", ["Custom"], index=0)
 
 with col2:
     st.subheader("Prompt")
-    default_prompt = selected.get("description", "") if selected else ""
     prompt = st.text_area(
-        "Problem description",  # ✅ updated label (no more “Describe the issue”)
-        value=default_prompt,
+        "Problem description",
+        value=selected.get("description", "") if selected else "",
         height=140,
-        placeholder="Offline metrics look good → production performance degraded. What are you seeing in prod?",
     )
 
 st.divider()
 
-run = st.button(
-    "Run Diagnosis",
-    type="primary",
-    disabled=not prompt.strip(),
-)
-
-if run:
-    with st.spinner("Running diagnosis..."):
-        try:
-            issue = prompt.strip()
-            scenario_title = selected.get("title") if selected else None
-            scenario_id = selected.get("id") if selected else None
-            runbook_url = get_runbook_url(selected)
-
-            if os.getenv("HF_TOKEN"):
-                try:
-                    diagnosis = build_llm_diagnosis(issue, scenario_title)
-                except Exception as llm_err:
-                    st.warning(f"HF failed, using stub: {llm_err}")
-                    diagnosis = build_stub_diagnosis(issue)
-            else:
-                diagnosis = build_stub_diagnosis(issue)
-
-            saved = insert_diagnosis_run(
-                scenario_id=scenario_id,
-                prompt=issue,
-                diagnosis=diagnosis,
-            )
-
-            st.success(f"Saved run: {saved['id']} @ {saved['created_at']}")
-            render_diagnosis(diagnosis=diagnosis, runbook_url=runbook_url)
-
-        except Exception as e:
-            st.error(f"Run failed: {e}")
-
-st.divider()
-st.subheader("History (latest 30)")
-
-try:
-    runs = fetch_recent_runs(30)
-    if not runs:
-        st.info("No diagnosis runs yet.")
-    else:
-        for r in runs:
-            with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write(
-                    f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}"
-                )
-                st.write("Input:")
-                st.write(r.get("input", ""))
-
-                d = r.get("diagnosis") or {}
-                st.divider()
-                render_severity(d.get("severity", "Medium"))
-
-                st.markdown("### Summary")
-                st.write((d.get("summary") or "").strip())
-
-                checks = _list_or_empty(d.get("checks"))
-                causes = _list_or_empty(d.get("causes"))
-                actions = _list_or_empty(d.get("actions"))
-
-                if checks:
-                    st.markdown("### Checks to Run")
-                    for c in checks:
-                        st.markdown(f"- {c}")
-
-                if causes:
-                    st.markdown("### Likely Causes")
-                    for c in causes:
-                        st.markdown(f"- {c}")
-
-                if actions:
-                    st.markdown("### Recommended Actions")
-                    for a in actions:
-                        st.markdown(f"- {a}")
-
-except Exception as e:
-    st.error(f"Failed to load history: {e}")
+if st.button("Run Diagnosis", disabled=not prompt.strip()):
+    diagnosis = build_llm_diagnosis(prompt, selected.get("title") if selected else None)
+    insert_diagnosis_run(
+        scenario_id=selected.get("id") if selected else None,
+        prompt=prompt,
+        diagnosis=diagnosis,
+    )
+    render_diagnosis(diagnosis, get_runbook_url(selected))
