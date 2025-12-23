@@ -15,8 +15,6 @@ st.title("ML Systems Reasoning Assistant")
 st.caption("Diagnose why ML systems fail in production — with checks, causes, and actions.")
 
 
-# ---------------- Runbook mapping (optional) ----------------
-# If your scenarios table already has a field like runbook_url, this mapping is only used as fallback.
 RUNBOOKS_BY_TITLE = {
     # "Missing features / null explosion": "https://your-runbook-link",
     # "Model drift after data change": "https://your-runbook-link",
@@ -110,7 +108,6 @@ def build_llm_diagnosis(prompt: str, scenario_title: Optional[str] = None) -> di
             "actions": obj.get("actions") or [],
         }
     except Exception:
-        # If model returns garbage/non-JSON, keep it readable
         return {
             "severity": "Medium",
             "summary": text.strip(),
@@ -124,12 +121,10 @@ def get_runbook_url(selected: Optional[Dict[str, Any]]) -> Optional[str]:
     if not selected:
         return None
 
-    # If DB returns a field like runbook_url / runbook / url, use it.
     for key in ("runbook_url", "runbook", "runbookLink", "runbook_link", "url"):
         if selected.get(key):
             return str(selected.get(key))
 
-    # Fallback mapping by title
     title = selected.get("title")
     if title and title in RUNBOOKS_BY_TITLE:
         return RUNBOOKS_BY_TITLE[title]
@@ -143,39 +138,6 @@ def _list_or_empty(val: Any) -> List[str]:
     return []
 
 
-def format_copy_text(issue: str, scenario_title: Optional[str], diagnosis: Dict[str, Any], runbook_url: Optional[str]) -> str:
-    severity = diagnosis.get("severity", "Medium")
-    summary = diagnosis.get("summary", "")
-    checks = _list_or_empty(diagnosis.get("checks"))
-    causes = _list_or_empty(diagnosis.get("causes"))
-    actions = _list_or_empty(diagnosis.get("actions"))
-
-    parts = []
-    parts.append(f"Scenario: {scenario_title or 'Custom'}")
-    parts.append(f"Issue: {issue}")
-    parts.append(f"Severity: {severity}")
-    if runbook_url:
-        parts.append(f"Runbook: {runbook_url}")
-    parts.append("")
-    parts.append("Summary:")
-    parts.append(summary.strip())
-    parts.append("")
-    if checks:
-        parts.append("Checks to Run:")
-        parts.extend([f"- {c}" for c in checks])
-        parts.append("")
-    if causes:
-        parts.append("Likely Causes:")
-        parts.extend([f"- {c}" for c in causes])
-        parts.append("")
-    if actions:
-        parts.append("Recommended Actions:")
-        parts.extend([f"- {a}" for a in actions])
-        parts.append("")
-
-    return "\n".join(parts).strip() + "\n"
-
-
 def render_severity(severity: str) -> None:
     sev = _normalize_severity(severity)
     if sev == "High":
@@ -186,7 +148,12 @@ def render_severity(severity: str) -> None:
         st.warning("Severity: Medium")
 
 
-def render_diagnosis(diagnosis: Dict[str, Any], issue: str, scenario_title: Optional[str], runbook_url: Optional[str]) -> None:
+def render_diagnosis(
+    diagnosis: Dict[str, Any],
+    issue: str,
+    scenario_title: Optional[str],
+    runbook_url: Optional[str],
+) -> None:
     render_severity(diagnosis.get("severity", "Medium"))
 
     if runbook_url:
@@ -195,7 +162,7 @@ def render_diagnosis(diagnosis: Dict[str, Any], issue: str, scenario_title: Opti
     st.subheader("Diagnosis")
 
     st.markdown("### Summary")
-    st.write(diagnosis.get("summary", "").strip())
+    st.write((diagnosis.get("summary") or "").strip())
 
     checks = _list_or_empty(diagnosis.get("checks"))
     causes = _list_or_empty(diagnosis.get("causes"))
@@ -216,19 +183,6 @@ def render_diagnosis(diagnosis: Dict[str, Any], issue: str, scenario_title: Opti
         for a in actions:
             st.markdown(f"- {a}")
 
-    st.divider()
-
-    # Copy blocks (Streamlit shows a copy button on st.code)
-    st.markdown("### Copy")
-    copy_text = format_copy_text(issue, scenario_title, diagnosis, runbook_url)
-    st.code(copy_text, language="markdown")
-    st.code(json.dumps(diagnosis, indent=2), language="json")
-
-    with st.expander("Show raw JSON payload"):
-        st.json(diagnosis)
-
-
-# ---------------- UI ----------------
 
 st.divider()
 
@@ -313,14 +267,15 @@ try:
     else:
         for r in runs:
             with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write(f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}")
+                scenario_id_str = str(r.get("scenario_id")) if r.get("scenario_id") is not None else ""
+                st.write(f"Scenario ID: {scenario_id_str}")
+
                 st.write("Input:")
                 st.write(r.get("input", ""))
 
-                d = r.get("diagnosis") or {}
-                # If you want runbook links in history too, you can’t infer scenario title from DB unless you store it.
-                # So history renders without runbook unless your diagnosis JSON includes it (we didn’t add it).
                 st.divider()
+
+                d = r.get("diagnosis") or {}
                 render_severity(d.get("severity", "Medium"))
 
                 st.markdown("### Summary")
@@ -344,9 +299,6 @@ try:
                     st.markdown("### Recommended Actions")
                     for a in actions:
                         st.markdown(f"- {a}")
-
-                with st.expander("Show raw JSON"):
-                    st.json(d)
 
 except Exception as e:
     st.error(f"Failed to load history: {e}")
