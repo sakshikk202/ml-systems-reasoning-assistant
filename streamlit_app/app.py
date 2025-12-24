@@ -177,11 +177,11 @@ st.divider()
 
 col1, col2 = st.columns([1, 1])
 
-# ✅ on_change callback: if user chooses Custom -> scenario becomes (Custom)
+# ✅ if Mode == Custom => force scenario to (Custom)
 def _sync_pick_to_custom():
     if st.session_state.get("mode_custom_only") == "Custom":
         st.session_state["scenario_pick"] = "(Custom)"
-
+        st.rerun()  # force redraw so dropdown visibly updates
 
 with col1:
     st.subheader("Mode")
@@ -192,20 +192,18 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # ✅ Scenario dropdown: show placeholder "Scenario" (instead of auto-selecting "(Custom)")
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
 
-    pick: Optional[str] = None
+    # ✅ Pick a scenario dropdown (default placeholder "Scenario" if supported)
     try:
         pick = st.selectbox(
             "Pick a scenario",
             scenario_titles,
-            index=None,                 # <-- no default selection
-            placeholder="Scenario",     # <-- shows "Scenario" in the field
+            index=None,
+            placeholder="Scenario",
             key="scenario_pick",
         )
     except TypeError:
-        # Fallback if Streamlit doesn't support placeholder/index=None
         pick = st.selectbox(
             "Pick a scenario",
             scenario_titles,
@@ -217,15 +215,14 @@ with col1:
     if pick and pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # ✅ Second dropdown stays "Custom" as-is
-    # ✅ Auto-sync scenario ONLY when user interacts with this dropdown (on_change)
+    # ✅ THIS is the real fix: Mode dropdown must be changeable
     st.selectbox(
         "Describe the issue",
-        ["Custom"],
+        ["Scenario", "Custom"],          # <-- now user can actually choose Custom
         index=0,
         key="mode_custom_only",
-        help="Use free-form problem description.",
-        on_change=_sync_pick_to_custom,
+        help="Pick Custom for free-form issue entry. Scenario keeps the chosen scenario.",
+        on_change=_sync_pick_to_custom,  # <-- forces Pick a scenario to (Custom)
     )
 
 with col2:
