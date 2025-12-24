@@ -177,11 +177,11 @@ st.divider()
 
 col1, col2 = st.columns([1, 1])
 
-# ✅ if Mode == Custom => force scenario to (Custom)
+# ✅ when "Describe the issue" == Custom => force Pick a scenario to (Custom)
 def _sync_pick_to_custom():
     if st.session_state.get("mode_custom_only") == "Custom":
         st.session_state["scenario_pick"] = "(Custom)"
-        st.rerun()  # force redraw so dropdown visibly updates
+        st.rerun()
 
 with col1:
     st.subheader("Mode")
@@ -194,7 +194,7 @@ with col1:
 
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
 
-    # ✅ Pick a scenario dropdown (default placeholder "Scenario" if supported)
+    # Pick a scenario dropdown
     try:
         pick = st.selectbox(
             "Pick a scenario",
@@ -215,14 +215,14 @@ with col1:
     if pick and pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # ✅ THIS is the real fix: Mode dropdown must be changeable
+    # ✅ Custom FIRST (default), Scenario second
     st.selectbox(
         "Describe the issue",
-        ["Scenario", "Custom"],          # <-- now user can actually choose Custom
-        index=0,
+        ["Custom", "Scenario"],          # <-- Custom on top
+        index=0,                         # <-- default = Custom
         key="mode_custom_only",
-        help="Pick Custom for free-form issue entry. Scenario keeps the chosen scenario.",
-        on_change=_sync_pick_to_custom,  # <-- forces Pick a scenario to (Custom)
+        help="Custom = free-form. Scenario = use selected scenario details.",
+        on_change=_sync_pick_to_custom,
     )
 
 with col2:
