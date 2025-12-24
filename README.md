@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ML Systems Reasoning Assistant
 
-## Getting Started
+## Overview
 
-First, run the development server:
+ML Systems Reasoning Assistant is a **production-focused diagnostic tool** designed to help engineers quickly triage and debug machine learning failures after deployment.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Instead of generic debugging advice, it converts real-world production symptoms into **structured operational guidance** — severity, checks to run, likely causes, and recommended actions — enabling faster and more consistent incident response.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The primary goal is to **reduce time-to-diagnosis during ML incidents**, especially when models perform well offline but fail under real production conditions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Why This Exists
 
-## Learn More
+In real production systems, machine learning failures are rarely caused by model code bugs.  
+They are usually triggered by operational issues such as:
 
-To learn more about Next.js, take a look at the following resources:
+- Data drift or upstream data changes  
+- Feature pipeline failures or null explosions  
+- Training–serving skew  
+- Inference latency spikes or downstream dependency throttling  
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This tool mirrors how **SREs and ML platform engineers debug production ML systems**:
+structured thinking, fast signal isolation, and clear operational next steps — not experimentation notebooks.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## How It Works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. An engineer selects a predefined failure scenario **or** enters a free-form production issue.
+2. The system analyzes the symptoms using an ML reliability reasoning framework.
+3. It produces a deterministic diagnostic output:
+   - Severity classification
+   - Checks to run immediately
+   - Likely root causes
+   - Recommended remediation actions
+4. The output is designed to be actionable during **live incidents and on-call scenarios**.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Intended Audience
+
+Designed for **Site Reliability Engineers (SREs)**, **ML Platform Engineers**, and **Infrastructure teams** responsible for operating, monitoring, and debugging machine learning systems in production.
+
+---
+
+## What This Project Demonstrates
+
+- Production-grade ML incident triage thinking  
+- SRE-style operational reasoning for ML systems  
+- Translation of vague symptoms into concrete debugging actions  
+- Clear separation between offline model performance and production reliability  
+
+---
+
+## Tech Stack
+
+- **Python**
+- **Streamlit** (lightweight diagnostic UI)
+- Modular backend logic for scenario reasoning and diagnosis
+
+---
+
+## Status
+
+This project is intentionally scoped as a **diagnostic assistant**, not a full monitoring or alerting system.  
+It is designed to complement existing observability and on-call workflows.
