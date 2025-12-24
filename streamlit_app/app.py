@@ -177,6 +177,12 @@ st.divider()
 
 col1, col2 = st.columns([1, 1])
 
+# ✅ on_change callback: if user chooses Custom -> scenario becomes (Custom)
+def _sync_pick_to_custom():
+    if st.session_state.get("mode_custom_only") == "Custom":
+        st.session_state["scenario_pick"] = "(Custom)"
+
+
 with col1:
     st.subheader("Mode")
 
@@ -195,12 +201,11 @@ with col1:
             "Pick a scenario",
             scenario_titles,
             index=None,                 # <-- no default selection
-            placeholder="Scenario",     # <-- this is what shows in the field
+            placeholder="Scenario",     # <-- shows "Scenario" in the field
             key="scenario_pick",
         )
     except TypeError:
-        # Fallback if your Streamlit version doesn't support placeholder/index=None
-        # (in that case, it'll default to "(Custom)")
+        # Fallback if Streamlit doesn't support placeholder/index=None
         pick = st.selectbox(
             "Pick a scenario",
             scenario_titles,
@@ -213,12 +218,14 @@ with col1:
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
     # ✅ Second dropdown stays "Custom" as-is
+    # ✅ Auto-sync scenario ONLY when user interacts with this dropdown (on_change)
     st.selectbox(
         "Describe the issue",
         ["Custom"],
         index=0,
         key="mode_custom_only",
         help="Use free-form problem description.",
+        on_change=_sync_pick_to_custom,
     )
 
 with col2:
