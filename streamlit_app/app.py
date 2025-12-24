@@ -3,7 +3,7 @@ import json
 import streamlit as st
 from typing import Optional, Dict, Any, List
 
-from db import fetch_scenarios, insert_diagnosis_run, fetch_recent_runs
+from db import fetch_scenarios, insert_diagnosis_run
 from llm import hf_chat
 
 st.set_page_config(
@@ -177,11 +177,13 @@ st.divider()
 
 col1, col2 = st.columns([1, 1])
 
-# ✅ when "Describe the issue" == Custom => force Pick a scenario to (Custom)
+
+# when "Describe the issue" == Custom => force Pick a scenario to (Custom)
 def _sync_pick_to_custom():
     if st.session_state.get("mode_custom_only") == "Custom":
         st.session_state["scenario_pick"] = "(Custom)"
         st.rerun()
+
 
 with col1:
     st.subheader("Mode")
@@ -215,11 +217,11 @@ with col1:
     if pick and pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # ✅ Custom FIRST (default), Scenario second
+    # Custom FIRST (default), Scenario second
     st.selectbox(
         "Describe the issue",
-        ["Custom", "Scenario"],          # <-- Custom on top
-        index=0,                         # <-- default = Custom
+        ["Custom", "Scenario"],
+        index=0,
         key="mode_custom_only",
         help="Custom = free-form. Scenario = use selected scenario details.",
         on_change=_sync_pick_to_custom,
@@ -271,48 +273,3 @@ if run:
 
         except Exception as e:
             st.error(f"Run failed: {e}")
-
-st.divider()
-st.subheader("History (latest 30)")
-
-try:
-    runs = fetch_recent_runs(30)
-    if not runs:
-        st.info("No diagnosis runs yet.")
-    else:
-        for r in runs:
-            with st.expander(f"{r['created_at']} — {r['id']}"):
-                st.write(
-                    f"Scenario ID: {str(r.get('scenario_id')) if r.get('scenario_id') is not None else ''}"
-                )
-                st.write("Input:")
-                st.write(r.get("input", ""))
-
-                d = r.get("diagnosis") or {}
-                st.divider()
-                render_severity(d.get("severity", "Medium"))
-
-                st.markdown("### Summary")
-                st.write((d.get("summary") or "").strip())
-
-                checks = _list_or_empty(d.get("checks"))
-                causes = _list_or_empty(d.get("causes"))
-                actions = _list_or_empty(d.get("actions"))
-
-                if checks:
-                    st.markdown("### Checks to Run")
-                    for c in checks:
-                        st.markdown(f"- {c}")
-
-                if causes:
-                    st.markdown("### Likely Causes")
-                    for c in causes:
-                        st.markdown(f"- {c}")
-
-                if actions:
-                    st.markdown("### Recommended Actions")
-                    for a in actions:
-                        st.markdown(f"- {a}")
-
-except Exception as e:
-    st.error(f"Failed to load history: {e}")
