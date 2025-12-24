@@ -171,14 +171,11 @@ def render_diagnosis(diagnosis: Dict[str, Any], runbook_url: Optional[str]) -> N
             st.markdown(f"- {a}")
 
 
-# ---------------- UI ----------------
-
 st.divider()
 
 col1, col2 = st.columns([1, 1])
 
 
-# when "Describe the issue" == Custom => force Pick a scenario to (Custom)
 def _sync_pick_to_custom():
     if st.session_state.get("mode_custom_only") == "Custom":
         st.session_state["scenario_pick"] = "(Custom)"
@@ -196,7 +193,6 @@ with col1:
 
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
 
-    # Pick a scenario dropdown
     try:
         pick = st.selectbox(
             "Pick a scenario",
@@ -217,7 +213,6 @@ with col1:
     if pick and pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # Custom FIRST (default), Scenario second
     st.selectbox(
         "Describe the issue",
         ["Custom", "Scenario"],
@@ -273,3 +268,16 @@ if run:
 
         except Exception as e:
             st.error(f"Run failed: {e}")
+
+st.divider()
+
+with st.expander("About the project"):
+    st.write(
+        "ML Systems Reasoning Assistant is a production-focused tool designed to help engineers "
+        "quickly diagnose machine learning failures after deployment. It translates real-world symptoms "
+        "into structured outputs like severity, checks to run, likely causes, and recommended actions, "
+        "enabling faster triage during incidents. The system supports both predefined failure scenarios "
+        "and free-form inputs, emphasizing practical ML reliability issues such as data drift, feature "
+        "pipeline failures, and training-serving skew. Built with a lightweight UI and deterministic "
+        "reasoning flow, it reflects how ML platform and SRE teams debug systems in real production environments."
+    )
