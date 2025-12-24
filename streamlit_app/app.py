@@ -186,22 +186,35 @@ with col1:
         st.error(f"Failed to load scenarios: {e}")
         scenarios = []
 
-    # 1) Scenario dropdown FIRST
+    # ✅ Scenario dropdown: show placeholder "Scenario" (instead of auto-selecting "(Custom)")
     scenario_titles = ["(Custom)"] + [s["title"] for s in scenarios]
-    pick = st.selectbox(
-        "Pick a scenario",
-        scenario_titles,
-        index=0,
-        key="scenario_pick",
-    )
+
+    pick: Optional[str] = None
+    try:
+        pick = st.selectbox(
+            "Pick a scenario",
+            scenario_titles,
+            index=None,                 # <-- no default selection
+            placeholder="Scenario",     # <-- this is what shows in the field
+            key="scenario_pick",
+        )
+    except TypeError:
+        # Fallback if your Streamlit version doesn't support placeholder/index=None
+        # (in that case, it'll default to "(Custom)")
+        pick = st.selectbox(
+            "Pick a scenario",
+            scenario_titles,
+            index=0,
+            key="scenario_pick",
+        )
 
     selected: Optional[Dict[str, Any]] = None
-    if pick != "(Custom)":
+    if pick and pick != "(Custom)":
         selected = next((s for s in scenarios if s["title"] == pick), None)
 
-    # 2) BELOW: rename this label to "Describe the issue"
+    # ✅ Second dropdown stays "Custom" as-is
     st.selectbox(
-        "Describe the issue",   # ✅ UPDATED (was "Mode")
+        "Describe the issue",
         ["Custom"],
         index=0,
         key="mode_custom_only",
